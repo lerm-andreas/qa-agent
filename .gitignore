@@ -1,0 +1,16 @@
+# Environment
+.env
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
