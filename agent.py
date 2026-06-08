@@ -11,7 +11,7 @@ load_dotenv()
 
 
 class QAAgent:
-    def __init__(self, provider: str = "anthropic", max_iterations: int = 2):
+    def __init__(self, provider: str = "anthropic", max_iterations: int = 5):
         self.llm = self._create_llm(provider)
         self.max_iterations = max_iterations
         self.history: list = []
