@@ -5,5 +5,14 @@ langchain-anthropic
 langchain-google-genai
 langchain-ollama
 langchain-core
+langchain-community
+langchain-text-splitters
 python-dotenv
 ddgs
+pypdf
+docx2txt
+sqlalchemy
+psycopg2-binary
+pgvector
+sentence-transformers
+alembic

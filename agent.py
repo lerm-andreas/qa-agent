@@ -5,19 +5,29 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 
 from prompts.registry import get_prompt_registry
+from rag.database import transaction
+from rag.rag_service import RAGService
 from tools import ToolWrapper
 
 load_dotenv()
 
 
 class QAAgent:
-    def __init__(self, provider: str = "anthropic", max_iterations: int = 2):
+    def __init__(self, provider: str = "anthropic", max_iterations: int = 15):
         self.llm = self._create_llm(provider)
         self.max_iterations = max_iterations
         self.history: list = []
         self.system_prompt = get_prompt_registry().render(
             "planner", role="QA expert", max_words=50
         )
+        # ingest all files from sample_docs/ at startup — new files are picked up
+        # on each restart; already-ingested files are silently skipped
+        # graceful degradation: agent still works if DB is unavailable
+        try:
+            with transaction() as db:
+                RAGService(db).ingest_folder()
+        except Exception as e:
+            print(f"⚠ RAG ingestion skipped — DB unavailable: {e}")
 
     def _create_llm(self, provider: str):
         providers = {

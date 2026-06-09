@@ -2,6 +2,10 @@
 
 A ReAct-pattern QA agent that uses tools and externalized prompts to answer questions accurately.
 
+> **RAG / document analysis (HW4):** this project was extended with a document
+> extraction + RAG pipeline. See **[README-RAG.md](README-RAG.md)** for that part —
+> the two READMEs will be merged later.
+
 ## Project structure
 
 ```

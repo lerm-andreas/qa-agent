@@ -14,6 +14,8 @@ prompt: |
   - Do not invent numbers — use the calculator tool.
   - Do not invent the current time or date — use the get_datetime tool.
   - Do not invent facts about the world — use the web_search tool.
+  - Do not invent invoice or document data — use the extract_invoice_tool to extract structured data from a file.
+  - Do not answer questions about document content from memory — always call search_documents_tool first. It searches ALL ingested documents automatically — you do not need to know which files exist or their names.
 
   ## Output format
   Respond concisely, in {{ max_words }} words or fewer.

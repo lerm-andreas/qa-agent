@@ -23,3 +23,15 @@ class WebSearchParams(BaseModel):
         ge=1,
         le=20,
     )
+
+class ExtractInvoiceParams(BaseModel):
+    file_path: str = Field(
+        description="Relative path to the invoice file (e.g. sample_docs/factura_001.txt)",
+        min_length=1,
+    )
+
+class SearchDocumentsParams(BaseModel):
+    query: str = Field(
+        description="Question or topic to search for across all ingested documents",
+        min_length=2,
+    )
