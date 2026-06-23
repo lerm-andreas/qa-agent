@@ -5,7 +5,7 @@ from alembic import context
 # --- project wiring ---
 # load Base.metadata so autogenerate can compare models vs DB schema
 from rag.database import Base, engine
-import rag.models  # noqa: F401 — registers Document + DocumentChunk on Base
+import rag.models  # noqa: F401 — registers Document + DocumentChunk + ChatMessage on Base
 
 config = context.config
 

@@ -1,0 +1,256 @@
+=== REFERINȚĂ DOMENIU — DOCUMENTE FINANCIAR-CONTABILE ROMÂNEȘTI ===
+
+I. CÂMPURI FACTURĂ FISCALĂ
+
+1. Număr factură (numar_factura / invoice_number)
+   - Format: șir alfanumeric, ex: "FAC-2024-001", "0012345", "Seria A Nr. 1234"
+   - Reguli: obligatoriu pe orice factură legală; unic per emitent per serie de facturare
+   - Extragere: caută "Factură nr.", "Nr. factură:", "Invoice No.", "Nr.:", "Serie+Număr"
+   - Validare: nu poate fi gol; dacă lipsește complet, documentul poate fi invalid fiscal
+
+2. Dată emitere (data_emitere / issue_date)
+   - Formate acceptate: DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD, "15 ianuarie 2024", "15 ian. 2024"
+   - Normalizare output: convertește întotdeauna la ISO 8601 (YYYY-MM-DD)
+   - Extragere: caută "Data:", "Dată emitere:", "Emisă la:", "Data facturii:", "Date:"
+   - Validare: data nu poate fi în viitor (excepție: factură proformă); null dacă lipsește
+
+3. Dată scadență (data_scadenta / due_date)
+   - Definit: data_emitere + termen_plata (zile); poate fi menționat explicit sau dedus
+   - Extragere: caută "Scadent la:", "Termen plată:", "Due date:", "Plătibil până la:"
+   - Dacă lipsește dar termen_plata e prezent: calculează data_emitere + termen_plata zile
+
+4. Furnizor (furnizor / supplier)
+   - Câmpuri: denumire_completa, CUI/CIF, numar_registrul_comertului (J), adresa_sediu,
+     IBAN, banca, reprezentant_legal, capital_social (pentru SA)
+   - Extragere: antetul facturii, secțiunea "Furnizor", "Emitent", "Vânzător", "Prestator"
+   - CUI format: opțional prefix "RO" + 2-10 cifre; ex: "RO12345678" sau "12345678"
+   - J (RC) format: J{cod_județ}/{număr_ordine}/{an}; ex: "J40/1234/2020"
+
+5. Client (client / buyer)
+   - Câmpuri: identice furnizorului (denumire, CUI/CNP, adresă, IBAN dacă e menționat)
+   - Extragere: secțiunea "Cumpărător", "Client", "Destinatar", "Beneficiar", "Bill To:"
+   - Persoană fizică: CNP în loc de CUI (13 cifre numerice, prima cifră indică sex+secol)
+
+6. Produse și Servicii (produse / line_items)
+   - Structură per linie: {cod_produs, denumire, unitate_masura, cantitate, pret_unitar,
+     valoare_fara_tva, cota_tva_procent, valoare_tva, valoare_cu_tva}
+   - Unități de măsură standard: buc, kg, l, m, m², m³, oră, zi, lună, serviciu, pachet, set, km
+   - Cote TVA legale în România:
+       19% = cota standard (bunuri și servicii generale)
+        9% = alimentare de bază, medicamente, bilete spectacole, HoReCa, cărți
+        5% = locuințe sociale, bilete muzee, energie termică pentru populație
+        0% = export, livrări intracomunitare, operațiuni scutite cu drept de deducere
+   - Extragere tabel: fiecare rând = o linie; asociază coloanele după antet
+
+7. Baza de impozitare (baza_impozitare / net_amount / taxable_base)
+   - Egal cu: SUM(linie.valoare_fara_tva) pentru toate liniile
+   - Verificare: suma valorilor nete din tabel == totalul bazei de impozitare de pe factură
+   - Dacă există mai multe cote TVA: grupează baza per cotă (baza_19, baza_9, baza_5, baza_0)
+
+8. Valoare TVA totală (valoare_tva / tax_amount)
+   - Egal cu: SUM(linie.valoare_tva) pentru toate liniile
+   - Dacă mai multe cote: listează {cota: "19%", baza: X, tva: Y}, {cota: "9%", ...}
+   - Verificare: valoare_fara_tva × (cota_tva / 100) == valoare_tva (toleranță ±0.02 RON)
+
+9. Total de plată (total / total_amount / grand_total)
+   - Egal cu: baza_impozitare + valoare_tva_totala
+   - Monedă: implicit RON; altele: EUR, USD, GBP, CHF — notează codul ISO explicit
+   - Curs valutar: dacă factura e în EUR dar TVA se declară în RON, notează cursul BNR folosit
+   - Verificare: baza + tva == total (toleranță ±0.05 RON pentru rotunjiri)
+
+10. Monedă (moneda / currency)
+    - Cod ISO 4217: RON, EUR, USD, GBP, CHF, HUF, CZK, PLN
+    - Dacă simbolul "$" e folosit fără alt indicator: presupune USD, notează incertitudinea
+
+11. Modalitate de plată (modalitate_plata / payment_method)
+    - Valori: "transfer bancar", "numerar", "card bancar", "cec", "bilet la ordin",
+      "compensare", "factoring", "ordin de plată"
+    - Extragere: "Mod plată:", "Plata se face prin:", "Condiții de plată:", "Payment terms:"
+
+12. IBAN furnizor (iban_furnizor / supplier_iban)
+    - Format RO: RO{2 cifre control}{4 litere cod bancă}{16 caractere cont} = total 24 caractere
+    - Validare: lungime exactă 24; prefixul "RO"; caracterele 3-4 sunt cifre
+    - Bănci RO principale — coduri IBAN: RNCB=BCR, BTRL=Banca Transilvania, INGB=ING,
+      BRD=BRD Société Générale, RZBR=Raiffeisen, CECE=CEC Bank, OTPV=OTP Bank,
+      BACX=UniCredit, PIRB=First Bank (ex-Piraeus), BPOS=Banca Comercială Română (Postbank)
+
+II. CÂMPURI CONTRACT
+
+1. Număr și tip contract (numar_contract, tip_contract)
+   - Identificator unic per contractant per an; format liber stabilit de emitent
+   - Tip: "prestări servicii", "vânzare-cumpărare", "închiriere", "antrepriză", "muncă",
+     "consultanță", "distribuție", "agenție comercială", "leasing"
+   - Extragere: antetul documentului, ex: "CONTRACT DE PRESTĂRI SERVICII Nr. 123/2024"
+
+2. Părți contractante (parti / parties)
+   - Prestator / Furnizor / Vânzător / Antreprenor — cel care livrează bunul/serviciul
+   - Beneficiar / Cumpărător / Client / Investitor — cel care plătește și primește
+   - Fiecare parte: denumire_completa, CUI/CNP, sediu_social, reprezentant_legal, calitate_în_contract
+   - Extragere: articolele de identificare a părților, de regulă la începutul contractului
+
+3. Obiectul contractului (obiect / scope_of_work)
+   - Descriere a serviciilor/bunurilor; poate fi generică + anexe tehnice detaliate
+   - Extragere: Art. 1 sau Art. 2 "Obiectul contractului"; dacă lipsește titlul, primul articol
+
+4. Valoarea contractului (valoare / contract_value)
+   - Poate fi: fixă, estimată (cu clauză de ajustare), maximă, sau tarifată (per unitate livrabilă)
+   - Notează: suma, moneda, dacă include sau exclude TVA, dacă e ferma sau estimativă
+   - Extragere: "Prețul contractului:", "Valoarea totală:", "Tarif:", "Buget estimat:"
+
+5. Durata contractului (durata / duration)
+   - Exprimată în luni sau ani, cu dată de intrare în vigoare și dată de expirare
+   - Prelungire: tacită reconducțiune, adiție, sau renegociere
+   - Extragere: "Durata contractului:", "Perioada de execuție:", "Termen de finalizare:"
+
+6. Termen de plată (termen_plata / payment_terms)
+   - Zile calendaristice de la data facturii sau de la data recepției/acceptanței
+   - Standard în România: 30 de zile (Legea 72/2013 privind combaterea întârzierii la plată)
+   - Extragere: "Plata se va efectua în X zile de la...", "Termen de plată: X zile"
+
+7. Penalități de întârziere (penalitati / late_payment_penalty)
+   - Format: procent per zi aplicat la suma restantă; ex: "0.05% pe zi de întârziere"
+   - Interval uzual în RO: 0.02% – 0.1% pe zi (peste 0.1% poate fi considerat excesiv)
+   - Extragere: "Penalități de întârziere:", "Clauza penală:", "Dobânda de întârziere:"
+   - Limită legală: penalitățile nu pot depăși valoarea debitului principal (principiu general)
+
+8. Garanție de bună execuție (garantie / performance_bond)
+   - Procent din valoarea contractului, de regulă 5% – 10%; reținut sau constituit separat
+   - Forme: scrisoare de garanție bancară, rețineri din fiecare factură, depozit cash
+   - Eliberare: la recepția finală sau la expirarea perioadei de garanție tehnică
+   - Extragere: "Garanția de bună execuție:", "Garanție de participare:", "Performance bond:"
+
+9. Forță majoră (forta_majora / force_majeure)
+   - Eveniment extern, imprevizibil, insurmontabil, care suspendă obligațiile contractuale
+   - Obligație notificare: de regulă 5–15 zile calendaristice de la producerea evenimentului
+   - Durată maximă tolerate înainte de reziliere unilaterală: de regulă 30–90 zile
+   - Extragere: articolul "Forța majoră" sau "Cazul de forță majoră"
+
+10. Confidențialitate (confidentialitate / confidentiality)
+    - Informații protejate: tehnice, comerciale, financiare, proprietate intelectuală
+    - Durată: egală cu durata contractului + perioadă post-contractuală (2–5 ani frecvent)
+    - Excepții: informații deja publice, divulgate conform legii, cunoscute anterior
+    - Extragere: "Clauza de confidențialitate", "Informații confidențiale", "NDA"
+
+11. Reziliere (reziliere / termination)
+    - Cauze: neîndeplinire obligații, insolvență/faliment, acordul părților, forță majoră > termen
+    - Preaviz standard: 30–60 zile; imediat ("de drept") pentru cauze grave (fraud, penalmente)
+    - Efecte: obligații în curs, restituire avansuri, garanții, clauze supraviețuitoare
+    - Extragere: "Rezilierea contractului", "Încetarea contractului", "Termination"
+
+12. Legislație aplicabilă și instanță competentă (legislatie / governing_law)
+    - Legea aplicabilă: de regulă "legea română în vigoare" pentru contracte interne
+    - Instanță: instanța de la sediul pârâtului sau instanța agreată (tribunalul comercial)
+    - Arbitraj: unele contracte preferă CCIR sau ICC în locul instanțelor judecătorești
+    - Extragere: ultimul articol din contract, de regulă "Dispoziții finale" sau "Litigii"
+
+III. CONVENȚII DE EXTRAGERE
+
+1. Câmpuri lipsă vs. câmpuri goale
+   - Returnează null (nu string gol "", nu "N/A", nu "necunoscut") pentru câmpurile absente
+   - Notează dacă câmpul e fizic absent din document vs. prezent dar cu valoare goală
+   - Nu inventa sau estima valori care nu apar explicit în documentul sursă
+
+2. Numere și sume monetare
+   - Separator mii în RO: punct (.) → 1.234.567; în format internațional: virgulă (,) → 1,234,567
+   - Separator zecimal în RO: virgulă (,) → 1.234,56; în EN: punct (.) → 1,234.56
+   - Normalizare output obligatorie: returnează float Python, fără separator de mii, punct zecimal
+   - Exemple: "1.234,56 RON" → 1234.56 | "1,234.56 EUR" → 1234.56 | "5.000 RON" → 5000.0
+
+3. Date calendaristice
+   - Input acceptat: orice format lizibil (DD.MM.YYYY, YYYY-MM-DD, "15 ian. 2024", etc.)
+   - Output normalizat obligatoriu: YYYY-MM-DD (ISO 8601) — ex: "15.03.2024" → "2024-03-15"
+   - Luni în română (abrevieri): ian, feb, mar, apr, mai, iun, iul, aug, sep, oct, noi, dec
+   - Ani cu 2 cifre: interpretează 00-30 ca 2000-2030; 31-99 ca 1931-1999
+
+4. Coduri fiscale și identificatori
+   - CUI/CIF: strip spații, strip prefixul "RO" pentru comparare numerică; lungime 2-10 cifre
+   - CNP: 13 cifre; prima cifră codifică sex+secol (1/2=M/F c.1900, 3/4=M/F c.1800, 5/6=M/F c.2000)
+   - IBAN RO: 24 caractere exacte; validare structurală: RO+2+4litere+16
+   - Nr. RC (J): format J{cod_județ 1-2 cifre}/{număr}/{an_4cifre}
+
+5. Unități de măsură
+   - Normalizare: "buc.", "Buc", "BUC" → "buc"; "ore", "Ore", "h", "H" → "oră"
+   - Notează UM originală + UM normalizată când diferă; nu modifica cantitățile
+
+6. Abrevieri frecvente în documente financiare românești
+   - TVA = Taxa pe Valoarea Adăugată (echiv. VAT/GST)
+   - CUI = Cod Unic de Înregistrare; CIF = Cod de Identificare Fiscală (sinonim)
+   - RC / J = Registrul Comerțului (număr de înregistrare)
+   - CF = Cod Fiscal (termen vechi, înlocuit de CUI)
+   - OP = Ordin de Plată; CEC = bilet la ordin bancar
+   - SRL = Societate cu Răspundere Limitată; SA = Societate pe Acțiuni
+   - PFA = Persoană Fizică Autorizată; II = Întreprindere Individuală; IF = Întreprindere Familială
+   - RA = Regie Autonomă; SNC = Societate în Nume Colectiv; SCS = Societate în Comandită Simplă
+   - NIR = Notă de Intrare-Recepție; PV = Proces-Verbal; AVZ = Aviz de însoțire marfă
+
+IV. REGULI CITARE RAG
+
+1. Citează întotdeauna sursa datelor extrase
+   - Format recomandat: "[Sursă: {filename}, secțiunea {chunk_index}, relevanță {score:.2f}]"
+   - Exemplu: "[Sursă: contract_consultanta.txt, secțiunea 3, relevanță 0.91]"
+   - Plasează citarea imediat după afirmația susținută de acea sursă
+
+2. Interpretarea scorului de relevanță (cosine similarity, scala 0–1)
+   - 0.90 – 1.00: match direct; citat cu certitudine
+   - 0.80 – 0.89: context direct relevant; citat cu încredere
+   - 0.70 – 0.79: probabil relevant; menționează că poate fi context indirect
+   - 0.60 – 0.69: relevanță scăzută; citat cu rezerve explicite
+   - sub 0.60: nu cita ca sursă directă; menționează lipsa de informații relevante
+
+3. Surse multiple care confirmă același fapt
+   - Citează sursa cu scorul cel mai mare ca sursă principală
+   - Menționează celelalte surse ca confirmare: "(confirmat de {filename2}, scor {score2:.2f})"
+   - Dacă sursele se contrazic: prezintă ambele variante cu sursele respective, fără a decide
+
+4. Lipsă date relevante în corpusul RAG
+   - Dacă niciun chunk nu depășește scorul 0.60: răspunde explicit:
+     "Nu am găsit informații suficient de relevante în documentele disponibile."
+   - Nu inventa răspunsuri din memoria proprie a modelului pentru date factuale specifice
+   - Nu presupune că un document există dacă nu a fost regăsit prin căutare
+
+5. Integritate și proveniență date
+   - Nu combina câmpuri din documente diferite fără a nota explicit sursa fiecăruia
+   - Dacă un document e parțial (chunk lipsă sau trunchiat), menționează limitarea
+   - Distinge: date extrase din document vs. interpretări/calcule derivate din date
+
+V. VALIDĂRI ȘI CONSISTENȚĂ FACTURĂ
+
+1. Validare aritmetică (obligatorie la orice extragere de factură)
+   - SUM(linie.valoare_fara_tva pentru toate liniile) ≈ baza_impozitare (toleranță ±0.02 RON)
+   - SUM(linie.valoare_tva pentru toate liniile) ≈ total_tva (toleranță ±0.02 RON)
+   - baza_impozitare + total_tva ≈ total_de_plata (toleranță ±0.05 RON)
+   - Dacă nu se respectă: raportează discrepanța, valorile extrase și diferența numerică
+
+2. Validare date calendaristice
+   - data_scadenta >= data_emitere (scadența nu poate fi înaintea emiterii)
+   - data_emitere <= data_curenta (factura nu poate fi emisă în viitor; excepție: proformă)
+   - termen_plata_zile = (data_scadenta - data_emitere).days; trebuie să fie pozitiv
+
+3. Validare CUI/CIF
+   - Strip "RO"; lungime 2–10 cifre; cifra de control e calculabilă (algoritm ANAF public)
+   - CUI invalid: menționează, continuă extragerea celorlalte câmpuri
+
+4. Validare IBAN RO
+   - Lungime exactă 24 caractere; primele 2 = "RO"; caracterele 3-4 = cifre check (00-99)
+   - Caracterele 5-8 = cod bancă (4 litere majuscule); restul 16 = cifre ale contului
+   - IBAN malformat: menționează problema specifică (lungime, prefix, cod bancă)
+
+VI. TIPURI DE DOCUMENTE SUPORTATE
+
+1.  Factură fiscală — document contabil obligatoriu; regim fiscal complet
+2.  Factură proformă — pre-factură, fără regim fiscal, document de ofertare
+3.  Bon fiscal — emis de case de marcat EFP; detalii limitate, valoare fiscală redusă
+4.  Chitanță — confirmare plată numerar; nu substituie factura fiscală
+5.  Contract prestări servicii — acord pentru furnizarea de servicii intangibile
+6.  Contract vânzare-cumpărare — transfer de proprietate bunuri mobile/imobile
+7.  Contract de muncă (CIM) — raport angajat-angajator, reglementat Codul Muncii
+8.  Act adițional — modificare/completare contract existent; referă contractul de bază
+9.  Proces-verbal de recepție — confirmă livrarea/execuția; declanșează obligația de plată
+10. Ordin de plată (OP) — instrucțiune de transfer bancar; nu e document comercial primar
+11. Decont de cheltuieli — justificare cheltuieli avansate de angajat cu documente anexate
+12. Notă de intrare-recepție (NIR) — înregistrare contabilă intrare bunuri în gestiune
+13. Aviz de însoțire marfă — document transport bunuri fără factură (transferuri interne)
+14. Situație de lucrări — document de decontare pentru execuție lucrări de construcții
+15. Raport de activitate — justificare prestații de servicii intelectuale/consultanță
+
+=== SFÂRȘIT REFERINȚĂ DOMENIU ===

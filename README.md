@@ -11,6 +11,7 @@ A ReAct-pattern QA agent that uses tools and externalized prompts to answer ques
 ```
 01-ChatBot/
 ├── agent.py                 # QA agent / LLM orchestration (entry point)
+├── demo_prompt_cache.py     # prompt caching demo — latency + token savings
 ├── tools/
 │   ├── __init__.py          # exports ToolWrapper
 │   ├── registry.py          # TOOL_REGISTRY + @register_tool
@@ -22,7 +23,13 @@ A ReAct-pattern QA agent that uses tools and externalized prompts to answer ques
 │   ├── planner.yaml         # main system prompt for the ReAct agent
 │   ├── analyst.yaml         # prompt for analytical tasks
 │   ├── summary.yaml         # prompt for summarization tasks
-│   └── extract.yaml         # prompt for data extraction tasks
+│   ├── extract.yaml         # prompt for data extraction tasks
+│   └── fixed_context.txt    # static domain reference block (cached prefix)
+├── rag/
+│   ├── memory.py            # PersistentMemory — load/save conversation history
+│   └── cache_metrics.py     # CacheMetrics — token savings accumulator
+├── alembic/versions/
+│   └── *_add_chat_messages_table.py  # migration: chat_messages table
 ├── requirements.txt
 └── .env                     # API keys (never commit this)
 ```
@@ -67,7 +74,7 @@ Agent: The current time in Bucharest is 14:32:10 on 2026-05-25.
 You: exit
 ```
 
-The agent remembers conversation history across turns within the same session. Type `exit` to quit.
+Conversation history is persisted to PostgreSQL and survives restarts — each `session_id` keeps its own history window. Type `exit` to quit.
 
 ## Testing tools without the LLM
 
@@ -80,6 +87,14 @@ print(ToolWrapper.call('calculator', {'expression': '137 * 42'}))
 print(ToolWrapper.call('get_datetime', {'timezone': 'Europe/Bucharest'}))
 print(ToolWrapper.call('web_search', {'query': 'Python news', 'max_results': 2}))
 "
+```
+
+## Prompt caching
+
+The agent caches its static prefix (tool catalog + system prompt + domain reference block) using Anthropic's prompt caching. On repeated calls the cached portion is read at ~0.10× the normal input cost. Run the demo to see token savings and latency improvement:
+
+```bash
+.venv/bin/python demo_prompt_cache.py
 ```
 
 ## Tools
