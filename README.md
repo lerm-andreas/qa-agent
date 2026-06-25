@@ -12,6 +12,12 @@ A ReAct-pattern QA agent that uses tools and externalized prompts to answer ques
 01-ChatBot/
 ├── agent.py                 # QA agent / LLM orchestration (entry point)
 ├── demo_prompt_cache.py     # prompt caching demo — latency + token savings
+├── train_intent.py          # one-shot training script — builds ml/intent_classifier.joblib
+├── demo_intent_classifier.py # sklearn vs LLM accuracy / latency / cost comparison
+├── ml/
+│   ├── __init__.py
+│   ├── intent_classifier.py # TF-IDF + LogisticRegression classifier (joblib persistence)
+│   └── intent_data.py       # 150 training + 30 held-out test examples (Romanian, 3 classes)
 ├── tools/
 │   ├── __init__.py          # exports ToolWrapper
 │   ├── registry.py          # TOOL_REGISTRY + @register_tool
@@ -95,6 +101,24 @@ The agent caches its static prefix (tool catalog + system prompt + domain refere
 
 ```bash
 .venv/bin/python demo_prompt_cache.py
+```
+
+## Intent classifier
+
+Each user message is classified into one of three intents — **search**, **extract**, or **summarize** — before it reaches the LLM. The classifier is a TF-IDF + Logistic Regression pipeline trained on 150 Romanian domain examples (50 per class).
+
+The agent uses confidence-gated injection: when confidence ≥ 0.7, the detected intent is prepended to the message as `[intent: search]` so the LLM can frame its response accordingly (locate/list for search, pull a specific field for extract, condense for summarize). Below 0.7 the annotation is skipped and the LLM reasons from the raw message without a potentially wrong hint.
+
+Train the artifact once (produces `ml/intent_classifier.joblib`, gitignored):
+
+```bash
+python train_intent.py
+```
+
+Compare the classifier against an LLM baseline on latency, cost, and accuracy:
+
+```bash
+python demo_intent_classifier.py
 ```
 
 ## Tools

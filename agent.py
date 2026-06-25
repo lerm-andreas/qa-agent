@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 
+from ml.intent_classifier import DEFAULT_MODEL_PATH, IntentClassifier
 from prompts.registry import get_prompt_registry
 from rag.cache_metrics import CacheMetrics
 from rag.database import transaction
@@ -31,6 +32,13 @@ class QAAgent:
         self.session_id = session_id
         self.memory = PersistentMemory(window=10)
         self.cache_metrics = CacheMetrics()   # accumulates prompt-cache token counts
+        # Load trained intent classifier once at startup (model loads
+        # once, ~50 ms cold-start paid here rather than per predict call).
+        # Graceful degradation: agent still works if train_intent.py hasn't been run.
+        try:
+            self.classifier: IntentClassifier | None = IntentClassifier(DEFAULT_MODEL_PATH)
+        except Exception:
+            self.classifier = None
         self.system_prompt = get_prompt_registry().render(
             "planner", role="QA expert", max_words=50
         )
@@ -55,6 +63,24 @@ class QAAgent:
 
     # load → invoke → save
     def chat(self, message: str) -> str:
+        # Classify intent before the LLM call (predict + confidence).
+        # Prepend as a bracket annotation so the LLM can frame its response accordingly
+        # (e.g. "search" → locate/list, "extract" → pull specific field, "summarize" → condense).
+        # We annotate the LLM message but save the original text to memory so history
+        # stays human-readable.
+        if self.classifier is not None:
+            intent, conf = self.classifier.predict(message)
+            print(f"[intent] {intent} (conf={conf:.2f})")
+            # Only inject when confident
+            # Here the fallback is skipping the annotation so the LLM reasons from
+            # the raw message rather than a potentially wrong hint.
+            if conf >= 0.7:
+                user_message_with_intent = f"[intent: {intent}] {message}"
+            else:
+                user_message_with_intent = message
+        else:
+            user_message_with_intent = message
+
         # 1. LOAD — last N turns from Postgres, mapped back to LangChain messages.
         history = [
             HumanMessage(m["content"]) if m["role"] == "user" else AIMessage(m["content"])
@@ -70,7 +96,7 @@ class QAAgent:
             {"type": "text", "text": FIXED_CONTEXT,
              "cache_control": {"type": "ephemeral"}},  # cut-line after this block
         ])
-        messages = [system_msg, *history, HumanMessage(message)]
+        messages = [system_msg, *history, HumanMessage(user_message_with_intent)]
         answer = self._react_loop(messages)
 
         # 3. SAVE — persist only the user message + final answer, not the tool
