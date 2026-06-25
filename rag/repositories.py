@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from rag.models import Document, DocumentChunk
+from rag.models import Document, DocumentChunk, ChatMessage
 
 
 class DocumentRepository:
@@ -90,3 +90,27 @@ class ChunkRepository:
         rows = self.db.execute(stmt).all()
         # unpack each Row into a clean Python tuple (DocumentChunk, float)
         return [(chunk, float(score)) for chunk, score in rows]
+
+
+class ChatMessageRepository:
+    """single API for all ChatMessage DB operations."""
+
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def add(self, session_id: str, role: str, content: str) -> ChatMessage:
+        msg = ChatMessage(session_id=session_id, role=role, content=content)
+        self.db.add(msg)
+        self.db.flush()
+        return msg
+
+    # newest N, then reversed → chronological for the LLM
+    def latest(self, session_id: str, limit: int) -> list[ChatMessage]:
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.timestamp.desc(), ChatMessage.id.desc())
+            .limit(limit)
+        )
+        rows = self.db.execute(stmt).scalars().all()
+        return list(reversed(rows))   # flip newest-first → chronological

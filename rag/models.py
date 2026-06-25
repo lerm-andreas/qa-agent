@@ -43,3 +43,15 @@ class DocumentChunk(Base):
         # speeds up "all chunks for document X" queries
         Index("ix_chunks_document_id", "document_id"),
     )
+
+
+# one row per persisted conversation turn (user OR assistant)
+# long-term conversation memory — survives agent restarts
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), nullable=False, index=True)   # conversation key
+    role       = Column(String(16), nullable=False)               # "user" / "assistant"
+    content    = Column(Text, nullable=False)
+    timestamp  = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
